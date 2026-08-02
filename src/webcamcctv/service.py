@@ -18,6 +18,7 @@ from .config import AppConfig, load
 from .motion import MotionDetector
 from .storage import StorageManager
 from .i18n import Translator
+from .features import Notification, Notifier, schedule_active
 
 STATE_DIR = Path(user_state_dir("WebcamCCTV"))
 STATUS = STATE_DIR / "status.json"
@@ -39,6 +40,10 @@ class Service:
         self.capture: Any = None
         self.writer: Any = None
         self.path: Path | None = None
+        self.working_path: Path | None = None
+        self.thumbnail: np.ndarray | None = None
+        self.notifier = Notifier()
+        self.storage.reconcile()
         self.started = 0.0
         self.last_motion = 0.0
         self.buffer: deque[tuple[float, np.ndarray]] = deque(
@@ -65,6 +70,10 @@ class Service:
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.cfg.camera.width)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.cfg.camera.height)
         cap.set(cv2.CAP_PROP_FPS, self.cfg.camera.fps)
+        for name, value in self.cfg.camera.controls.items():
+            prop = getattr(cv2, f"CAP_PROP_{name.upper()}", None)
+            if prop is not None:
+                cap.set(prop, value)
         if not cap.isOpened():
             cap.release()
             self.capture = None
@@ -95,18 +104,25 @@ class Service:
                 2,
                 cv2.LINE_AA,
             )
+        height, width = frame.shape[:2]
+        for polygon in self.cfg.camera.privacy_masks:
+            points = np.array([(int(x * width), int(y * height)) for x, y in polygon], np.int32)
+            cv2.fillPoly(frame, [points], (0, 0, 0))
         return frame
 
     def begin(self, frame: np.ndarray, score: float) -> None:
         self.path = self.storage.recording_path(self.cfg.camera.name)
+        self.working_path = self.path.with_name(self.path.stem + ".partial.mp4")
         h, w = frame.shape[:2]
         self.writer = cv2.VideoWriter(
-            str(self.path), cv2.VideoWriter_fourcc(*"mp4v"), self.cfg.camera.fps, (w, h)
+            str(self.working_path), cv2.VideoWriter_fourcc(*self.cfg.features.encoder),  # type: ignore[attr-defined]
+            self.cfg.camera.fps, (w, h)
         )
         if not self.writer.isOpened():
             self.writer = None
             raise RuntimeError(self.trn.tr("recording.encoder_error"))
         self.started = time.time()
+        self.thumbnail = frame.copy()
         for _, old in self.buffer:
             self.writer.write(old)
         self.storage.write_metadata(
@@ -125,6 +141,12 @@ class Service:
             self.writer.release()
             self.writer = None
         if self.path:
+            if self.working_path and self.working_path.exists():
+                self.working_path.replace(self.path)
+            thumbnail = (
+                self.storage.create_thumbnail(self.path, self.thumbnail)
+                if self.cfg.features.thumbnails and self.thumbnail is not None else None
+            )
             self.storage.write_metadata(
                 self.path,
                 {
@@ -133,9 +155,15 @@ class Service:
                     "ended": time.time(),
                     "event": self.cfg.mode,
                     "protected": False,
+                    "thumbnail": str(thumbnail) if thumbnail else None,
+                    "encoder": self.cfg.features.encoder,
                 },
             )
+            if self.cfg.features.sync_directory:
+                self.storage.synchronize(self.path, Path(self.cfg.features.sync_directory).expanduser())
             self.path = None
+            self.working_path = None
+            self.thumbnail = None
 
     def run(self) -> int:
         delay = 1.0
@@ -165,6 +193,10 @@ class Service:
                     continue
                 frame = self.transform(raw)
                 now = time.time()
+                if not schedule_active(self.cfg.schedule):
+                    self.finish()
+                    self.stop.wait(0.25)
+                    continue
                 motion, score = self.detector.detect(frame)
                 self.buffer.append((now, frame.copy()))
                 should = self.cfg.mode == "continuous" or (
@@ -179,6 +211,8 @@ class Service:
                 )
                 if motion:
                     self.last_motion = now
+                    if self.cfg.features.notifications:
+                        self.notifier.send(Notification("motion", "Motion detected"), now)
                 if should and self.writer is None:
                     self.begin(frame, score)
                 if self.writer:

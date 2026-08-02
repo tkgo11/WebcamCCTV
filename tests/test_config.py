@@ -8,7 +8,13 @@ def test_atomic_roundtrip(tmp_path):
     cfg = AppConfig()
     cfg.camera.name = "Garage"
     save(cfg, p)
-    assert load(p).camera.name == "Garage" and json.loads(p.read_text())["schema_version"] == 1
+    assert load(p).camera.name == "Garage" and json.loads(p.read_text())["schema_version"] == 2
+
+
+def test_v1_configuration_is_migrated(tmp_path):
+    p = tmp_path / "config.json"
+    p.write_text('{"schema_version": 1, "camera": {"name": "Legacy"}}')
+    assert load(p).camera.name == "Legacy"
 
 
 def test_invalid_config_rejected():

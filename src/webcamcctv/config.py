@@ -11,11 +11,12 @@ import tempfile
 from platformdirs import user_config_dir, user_videos_dir
 from .i18n import SUPPORTED_LOCALES, Translator, detect_locale
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 @dataclass(slots=True)
 class CameraConfig:
+    id: str = "camera-1"
     device: int = 0
     name: str = "Camera 1"
     width: int = 1280
@@ -23,6 +24,39 @@ class CameraConfig:
     fps: float = 20.0
     rotation: int = 0
     mirror: bool = False
+    enabled: bool = True
+    controls: dict[str, float] = field(default_factory=dict)
+    motion_zones: list[list[list[float]]] = field(default_factory=list)
+    privacy_masks: list[list[list[float]]] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class AudioConfig:
+    enabled: bool = False
+    device: str = ""
+    sample_rate: int = 48000
+    channels: int = 1
+
+
+@dataclass(slots=True)
+class ScheduleConfig:
+    enabled: bool = False
+    weekdays: list[int] = field(default_factory=lambda: list(range(7)))
+    start: str = "00:00"
+    end: str = "23:59"
+    record_when_locked: bool = False
+
+
+@dataclass(slots=True)
+class FeatureConfig:
+    thumbnails: bool = True
+    notifications: bool = False
+    ai_model: str = ""
+    remote_api: bool = False
+    remote_bind: str = "127.0.0.1"
+    encryption: bool = False
+    sync_directory: str = ""
+    encoder: str = "mp4v"
 
 
 @dataclass(slots=True)
@@ -49,6 +83,10 @@ class AppConfig:
     schema_version: int = SCHEMA_VERSION
     mode: str = "motion"
     camera: CameraConfig = field(default_factory=CameraConfig)
+    cameras: list[CameraConfig] = field(default_factory=list)
+    audio: AudioConfig = field(default_factory=AudioConfig)
+    schedule: ScheduleConfig = field(default_factory=ScheduleConfig)
+    features: FeatureConfig = field(default_factory=FeatureConfig)
     motion: MotionConfig = field(default_factory=MotionConfig)
     storage: StorageConfig = field(default_factory=StorageConfig)
     watermark_timestamp: bool = True
@@ -60,20 +98,25 @@ class AppConfig:
 
     @classmethod
     def from_dict(cls, raw: dict[str, Any]) -> "AppConfig":
-        if raw.get("schema_version") != SCHEMA_VERSION:
+        version = raw.get("schema_version", 1)
+        if version not in {1, SCHEMA_VERSION}:
             raise ValueError(
                 Translator(raw.get("language", detect_locale())).tr(
                     "validation.schema", version=raw.get("schema_version")
                 )
             )
         cfg = cls(
+            schema_version=SCHEMA_VERSION,
             camera=CameraConfig(**raw.get("camera", {})),
+            cameras=[CameraConfig(**item) for item in raw.get("cameras", [])],
+            audio=AudioConfig(**raw.get("audio", {})),
+            schedule=ScheduleConfig(**raw.get("schedule", {})),
+            features=FeatureConfig(**raw.get("features", {})),
             motion=MotionConfig(**raw.get("motion", {})),
             storage=StorageConfig(**raw.get("storage", {})),
             **{
                 k: raw[k]
                 for k in (
-                    "schema_version",
                     "mode",
                     "watermark_timestamp",
                     "preview_fps",
@@ -103,6 +146,27 @@ class AppConfig:
             errors.append(tr.tr("validation.resolution"))
         if self.camera.rotation not in {0, 90, 180, 270}:
             errors.append(tr.tr("validation.rotation"))
+        cameras = self.cameras or [self.camera]
+        if len({camera.id for camera in cameras}) != len(cameras):
+            errors.append("camera ids must be unique")
+        if self.audio.sample_rate not in {8000, 16000, 22050, 44100, 48000, 96000}:
+            errors.append("unsupported audio sample rate")
+        if self.audio.channels not in {1, 2}:
+            errors.append("audio channels must be one or two")
+        if any(day not in range(7) for day in self.schedule.weekdays):
+            errors.append("schedule weekdays must be between 0 and 6")
+        for value in (self.schedule.start, self.schedule.end):
+            try:
+                hour, minute = (int(part) for part in value.split(":"))
+                if not 0 <= hour <= 23 or not 0 <= minute <= 59:
+                    raise ValueError
+            except ValueError:
+                errors.append("schedule times must use HH:MM")
+                break
+        if self.features.remote_api and self.features.remote_bind != "127.0.0.1":
+            errors.append("remote API is restricted to loopback")
+        if self.features.encoder not in {"mp4v", "avc1", "MJPG"}:
+            errors.append("unsupported encoder")
         if not 0 < self.motion.sensitivity < 1:
             errors.append(tr.tr("validation.sensitivity"))
         if self.motion.minimum_area < 1:
