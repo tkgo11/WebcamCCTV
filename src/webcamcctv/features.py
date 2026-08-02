@@ -2,29 +2,39 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime
-from pathlib import Path
-from typing import Any, Callable, cast
-from importlib import import_module
 import hashlib
 import json
 import os
+import platform
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import datetime
+from importlib import import_module
+from pathlib import Path
+from typing import Any, cast
 
 from .config import ScheduleConfig
 
 
-def schedule_active(config: ScheduleConfig, now: datetime | None = None, *, locked: bool = False) -> bool:
+def schedule_active(
+    config: ScheduleConfig, now: datetime | None = None, *, locked: bool = False
+) -> bool:
     if not config.enabled:
         return True
     now = now or datetime.now().astimezone()
-    if now.weekday() not in config.weekdays or (locked and not config.record_when_locked):
+    if locked and not config.record_when_locked:
         return False
     current = now.hour * 60 + now.minute
     start_h, start_m = map(int, config.start.split(":"))
     end_h, end_m = map(int, config.end.split(":"))
     start, end = start_h * 60 + start_m, end_h * 60 + end_m
-    return start <= current <= end if start <= end else current >= start or current <= end
+    if start == end:
+        return now.weekday() in config.weekdays
+    if start < end:
+        return now.weekday() in config.weekdays and start <= current <= end
+    if current >= start:
+        return now.weekday() in config.weekdays
+    return current <= end and (now.weekday() - 1) % 7 in config.weekdays
 
 
 class SecretStore:
@@ -73,13 +83,26 @@ def encrypt_archive(source: Path, destination: Path, key: bytes) -> None:
 
 
 def model_fingerprint(model: Path) -> str:
-    return hashlib.sha256(model.read_bytes()).hexdigest()
+    digest = hashlib.sha256()
+    with model.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def redact(value: object) -> object:
     sensitive = {"password", "secret", "token", "key", "credential"}
     if isinstance(value, dict):
-        return {k: ("<redacted>" if any(word in k.lower() for word in sensitive) else redact(v)) for k, v in value.items()}
+        private_fields = {"camera", "device", "directory", "path", "ai_model", "sync_directory"}
+        return {
+            key: (
+                "<redacted>"
+                if key.casefold() in private_fields
+                or any(word in key.casefold() for word in sensitive)
+                else redact(item)
+            )
+            for key, item in value.items()
+        }
     if isinstance(value, list):
         return [redact(item) for item in value]
     return value
@@ -87,7 +110,13 @@ def redact(value: object) -> object:
 
 def write_diagnostics(destination: Path, config: Any, status: dict[str, object]) -> Path:
     from dataclasses import asdict
-    import platform
-    payload = {"schema": 1, "platform": platform.platform(), "config": redact(asdict(config)), "status": redact(status)}
+
+    payload = {
+        "schema": 1,
+        "platform": platform.platform(),
+        "config": redact(asdict(config)),
+        "status": redact(status),
+    }
+    destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", "utf-8")
     return destination

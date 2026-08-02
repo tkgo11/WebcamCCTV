@@ -1,13 +1,15 @@
 """Recording metadata and bounded retention."""
 
 from __future__ import annotations
-from pathlib import Path
-import json
-import shutil
-import time
-import sqlite3
+
 import hashlib
+import json
 import os
+import shutil
+import sqlite3
+import tempfile
+import time
+from pathlib import Path
 from typing import Any
 
 
@@ -33,26 +35,57 @@ class StorageManager:
         stamp = time.localtime(now)
         folder = self.root / time.strftime("%Y/%m/%d", stamp)
         folder.mkdir(parents=True, exist_ok=True)
-        safe = "".join(c for c in camera if c.isalnum() or c in "-_ ").strip() or "camera"
-        return folder / f"{time.strftime('%Y%m%d_%H%M%S', stamp)}_{safe}.mp4"
+        safe = "".join(c for c in camera if c.isalnum() or c in "-_ ").strip()[:80].rstrip()
+        safe = safe or "camera"
+        stem = f"{time.strftime('%Y%m%d_%H%M%S', stamp)}_{safe}"
+        candidate = folder / f"{stem}.mp4"
+        sequence = 1
+        while (
+            candidate.exists()
+            or candidate.with_suffix(".json").exists()
+            or candidate.with_name(candidate.stem + ".partial.mp4").exists()
+        ):
+            candidate = folder / f"{stem}_{sequence:03d}.mp4"
+            sequence += 1
+        return candidate
 
     def write_metadata(self, video: Path, data: dict[str, object]) -> None:
-        temp = video.with_suffix(".json.tmp")
-        temp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", "utf-8")
-        temp.replace(video.with_suffix(".json"))
+        target = video.with_suffix(".json")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        fd, temporary = tempfile.mkstemp(
+            prefix=f".{target.stem}-", suffix=".json", dir=target.parent
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as stream:
+                json.dump(data, stream, ensure_ascii=False, indent=2)
+                stream.write("\n")
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, target)
+        finally:
+            if os.path.exists(temporary):
+                os.unlink(temporary)
         with self._db() as db:
             db.execute(
                 """INSERT INTO recordings(path,started,ended,camera,event,protected,thumbnail,sha256)
                 VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET ended=excluded.ended,
                 camera=excluded.camera,event=excluded.event,protected=excluded.protected,
                 thumbnail=excluded.thumbnail,sha256=excluded.sha256""",
-                (str(video), data.get("started"), data.get("ended"), data.get("camera"),
-                 data.get("event"), int(bool(data.get("protected"))), data.get("thumbnail"),
-                 data.get("sha256")),
+                (
+                    str(video),
+                    data.get("started"),
+                    data.get("ended"),
+                    data.get("camera"),
+                    data.get("event"),
+                    int(bool(data.get("protected"))),
+                    data.get("thumbnail"),
+                    data.get("sha256"),
+                ),
             )
 
     def create_thumbnail(self, video: Path, frame: Any) -> Path | None:
         import cv2
+
         target = video.with_suffix(".jpg")
         return target if cv2.imwrite(str(target), frame, [cv2.IMWRITE_JPEG_QUALITY, 78]) else None
 
@@ -62,30 +95,64 @@ class StorageManager:
     def reconcile(self) -> int:
         """Import sidecars and quarantine interrupted working files."""
         count = 0
+        for partial in self.root.rglob("*.partial.mp4"):
+            interrupted_mtime = partial.stat().st_mtime
+            base_name = partial.name.removesuffix(".partial.mp4")
+            interrupted = partial.with_name(f"{base_name}.interrupted.mp4")
+            sequence = 1
+            while interrupted.exists():
+                interrupted = partial.with_name(f"{base_name}.interrupted-{sequence:03d}.mp4")
+                sequence += 1
+            partial.rename(interrupted)
+            original_sidecar = partial.with_name(f"{base_name}.json")
+            if original_sidecar.exists():
+                try:
+                    data = json.loads(original_sidecar.read_text("utf-8"))
+                    if isinstance(data, dict):
+                        data.update(event="interrupted", ended=interrupted_mtime)
+                        self.write_metadata(interrupted, data)
+                        original_sidecar.unlink(missing_ok=True)
+                except (OSError, ValueError, TypeError):
+                    pass
         for sidecar in self.root.rglob("*.json"):
             try:
-                self.write_metadata(sidecar.with_suffix(".mp4"), json.loads(sidecar.read_text("utf-8")))
+                video = sidecar.with_suffix(".mp4")
+                data = json.loads(sidecar.read_text("utf-8"))
+                if not video.exists() or not isinstance(data, dict):
+                    continue
+                self.write_metadata(video, data)
                 count += 1
             except (OSError, ValueError, TypeError):
                 continue
-        for partial in self.root.rglob("*.partial"):
-            partial.rename(partial.with_suffix(".interrupted"))
         return count
 
     def synchronize(self, video: Path, directory: Path) -> Path:
-        directory.mkdir(parents=True, exist_ok=True)
-        target = directory / video.name
+        relative = video.relative_to(self.root)
+        target = directory / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
         temp = target.with_suffix(target.suffix + ".tmp")
-        shutil.copy2(video, temp)
-        if hashlib.sha256(temp.read_bytes()).digest() != hashlib.sha256(video.read_bytes()).digest():
+        try:
+            shutil.copy2(video, temp)
+            if file_sha256(temp) != file_sha256(video):
+                raise OSError("synchronization checksum mismatch")
+            os.replace(temp, target)
+        finally:
             temp.unlink(missing_ok=True)
-            raise OSError("synchronization checksum mismatch")
-        os.replace(temp, target)
         return target
 
+    def synchronize_recording(self, video: Path, directory: Path) -> list[Path]:
+        synchronized = [self.synchronize(video, directory)]
+        for companion in (video.with_suffix(".json"), video.with_suffix(".jpg")):
+            if companion.exists():
+                synchronized.append(self.synchronize(companion, directory))
+        return synchronized
+
     def cleanup(self, now: float | None = None) -> list[Path]:
-        now = now or time.time()
-        files = sorted(self.root.rglob("*.mp4"), key=lambda p: p.stat().st_mtime)
+        now = time.time() if now is None else now
+        files = sorted(
+            (path for path in self.root.rglob("*.mp4") if not path.name.endswith(".partial.mp4")),
+            key=lambda path: path.stat().st_mtime,
+        )
         total = sum(p.stat().st_size for p in files)
         deleted = []
         for p in files:
@@ -102,3 +169,11 @@ class StorageManager:
                 total -= size
                 deleted.append(p)
         return deleted
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()

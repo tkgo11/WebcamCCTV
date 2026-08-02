@@ -2,6 +2,7 @@
 """Validate locale JSON structure, parity, placeholders, and report unused keys."""
 
 from __future__ import annotations
+
 import ast
 import json
 from pathlib import Path
@@ -12,10 +13,10 @@ LOCALES = ROOT / "src/webcamcctv/locales"
 
 
 def load(path: Path) -> dict[str, str]:
-    duplicates = []
+    duplicates: list[str] = []
 
-    def pairs(items):
-        result = {}
+    def pairs(items: list[tuple[str, object]]) -> dict[str, object]:
+        result: dict[str, object] = {}
         for key, value in items:
             if key in result:
                 duplicates.append(key)

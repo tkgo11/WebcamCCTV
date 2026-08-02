@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
+import json
+import locale
+import logging
+import os
 from datetime import datetime
 from importlib.resources import files
 from pathlib import Path
 from string import Formatter
 from typing import Any
-import json
-import locale
-import logging
-import os
 
 SUPPORTED_LOCALES = ("en", "ko")
 DEFAULT_LOCALE = "en"
@@ -74,7 +74,7 @@ class Translator:
             log.warning("Malformed translation %s/%s: %s", self.language, key, exc)
             return f"⟦{key}⟧"
 
-    def plural(self, key: str, count: int | float, **values: object) -> str:
+    def plural(self, key: str, count: float, **values: object) -> str:
         category = "one" if self.language == "en" and count == 1 else "other"
         return self.tr(f"{key}.{category}", count=format_number(count, self.language), **values)
 
@@ -83,7 +83,7 @@ def placeholders(value: str) -> set[str]:
     return {name for _, name, _, _ in Formatter().parse(value) if name}
 
 
-def format_number(value: int | float, language: str, decimals: int | None = None) -> str:
+def format_number(value: float, language: str, decimals: int | None = None) -> str:
     """Format numbers without mutating the process-global C locale."""
     if decimals is None:
         text = f"{value:,}" if isinstance(value, int) else f"{value:,.2f}".rstrip("0").rstrip(".")
