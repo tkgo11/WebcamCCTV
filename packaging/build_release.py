@@ -19,6 +19,12 @@ BUILD_ROOT = ROOT / "build" / "pyinstaller"
 DIST = BUILD_ROOT / "dist"
 WORK = BUILD_ROOT / "work"
 SPEC = BUILD_ROOT / "spec"
+WINDOWS_ICON = ROOT / "packaging" / "assets" / "app_icon.ico"
+
+
+def executable_icon_args(os_name: str) -> list[str]:
+    """Return platform-specific PyInstaller executable icon arguments."""
+    return [f"--icon={WINDOWS_ICON}"] if os_name == "nt" else []
 
 
 def run_pyinstaller(name: str, launcher: str, *, windowed: bool = False) -> None:
@@ -35,6 +41,7 @@ def run_pyinstaller(name: str, launcher: str, *, windowed: bool = False) -> None
         f"--distpath={DIST}",
         f"--workpath={WORK / name}",
         f"--specpath={SPEC}",
+        *executable_icon_args(os.name),
     ]
     if windowed:
         command.append("--windowed")
