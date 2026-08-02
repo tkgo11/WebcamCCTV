@@ -5,10 +5,11 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import cv2
-from PySide6.QtCore import QTimer, Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction, QCloseEvent, QIcon, QImage, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -35,10 +36,17 @@ from .cameras import discover
 from .config import AppConfig, load, save
 from .i18n import Translator, format_datetime
 from .runtime import companion_command
-from .service import STATUS
+from .state import read_status, service_running
 
 LANGUAGES = (("en", "language.english"), ("ko", "language.korean"))
 MODES = (("motion", "mode.motion"), ("continuous", "mode.continuous"), ("manual", "mode.manual"))
+CONTROLS = (
+    ("start", "service.start"),
+    ("stop", "service.stop"),
+    ("restart", "service.restart"),
+    ("record-start", "recording.start"),
+    ("record-stop", "recording.stop"),
+)
 
 
 class FirstRunDialog(QDialog):
@@ -88,7 +96,9 @@ class Window(QMainWindow):
         super().__init__()
         self.cfg = cfg
         self.trn = Translator(cfg.language)
-        self.cap = None
+        self.cap: cv2.VideoCapture | None = None
+        self.last_state_check = 0.0
+        self.service_data: dict[str, object] = {"running": False}
         self.resize(1080, 720)
         root = QWidget()
         outer = QHBoxLayout(root)
@@ -123,7 +133,7 @@ class Window(QMainWindow):
         self.form = form
         self.controls = QHBoxLayout()
         self.control_buttons: list[tuple[QPushButton, str]] = []
-        for command in ("start", "stop", "restart"):
+        for command, _key in CONTROLS:
             button = QPushButton()
             button.clicked.connect(lambda _, value=command: self.command(value))
             self.controls.addWidget(button)
@@ -156,14 +166,17 @@ class Window(QMainWindow):
         self.setCentralWidget(root)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.tick)
-        self.timer.start(250)
+        self.timer.start(max(16, int(1000 / cfg.preview_fps)))
         self.language.currentIndexChanged.connect(self.change_language)
         self.camera.currentIndexChanged.connect(self.open_camera)
+        self.mode.currentIndexChanged.connect(self.update_controls)
+        self.tray_available = QSystemTrayIcon.isSystemTrayAvailable()
         self.tray = QSystemTrayIcon(QIcon.fromTheme("camera-video"), self)
         self.tray.activated.connect(self.tray_activated)
         self.retranslate(rebuild=True)
         self.open_camera()
-        self.tray.show()
+        if self.tray_available:
+            self.tray.show()
 
     def retranslate(self, *, rebuild: bool = False) -> None:
         self.trn = Translator(self.cfg.language)
@@ -177,9 +190,10 @@ class Window(QMainWindow):
             self.language.blockSignals(False)
             self.camera.blockSignals(True)
             self.camera.clear()
-            for item in discover(language=self.cfg.language):
+            for camera_data in discover(language=self.cfg.language):
                 self.camera.addItem(
-                    f"{item['name']} — {item['width']}×{item['height']}", item["index"]
+                    f"{camera_data['name']} — {camera_data['width']}×{camera_data['height']}",
+                    camera_data["index"],
                 )
             self.camera.setCurrentIndex(max(0, self.camera.findData(self.cfg.camera.device)))
             self.camera.blockSignals(False)
@@ -198,11 +212,15 @@ class Window(QMainWindow):
             (self.days_row, "settings.retention_days"),
         )
         for row, key in labels:
-            self.form.itemAt(row, QFormLayout.ItemRole.LabelRole).widget().setText(self.trn.tr(key))
+            label_item = self.form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+            widget = label_item.widget() if label_item is not None else None
+            if isinstance(widget, QLabel):
+                widget.setText(self.trn.tr(key))
         self.browse.setText(self.trn.tr("common.browse"))
         self.save_button.setText(self.trn.tr("settings.save"))
+        control_labels = dict(CONTROLS)
         for button, command in self.control_buttons:
-            button.setText(self.trn.tr(f"service.{command}"))
+            button.setText(self.trn.tr(control_labels[command]))
         self.preview.setText(self.trn.tr("camera.preview"))
         self.recordings_box.setTitle(self.trn.tr("recordings.group"))
         self.search.setPlaceholderText(self.trn.tr("recordings.search"))
@@ -221,6 +239,7 @@ class Window(QMainWindow):
                 else widget.toolTip() or self.settings_box.title()
             )
         self.build_tray_menu()
+        self.update_controls()
         self.refresh_recordings()
 
     def change_language(self) -> None:
@@ -241,7 +260,7 @@ class Window(QMainWindow):
             menu.addAction(action)
         menu.addSeparator()
         quit_action = QAction(self.trn.tr("tray.quit"), menu)
-        quit_action.triggered.connect(QApplication.instance().quit)
+        quit_action.triggered.connect(QApplication.quit)
         menu.addAction(quit_action)
         self.tray.setContextMenu(menu)
         self.tray.setToolTip(self.trn.tr("tray.status"))
@@ -250,7 +269,18 @@ class Window(QMainWindow):
         if self.cap:
             self.cap.release()
         data = self.camera.currentData()
-        self.cap = cv2.VideoCapture(data) if data is not None else None
+        if service_running():
+            self.cap = None
+            self.preview.clear()
+            self.preview.setText(self.trn.tr("camera.preview_paused"))
+        else:
+            self.cap = cv2.VideoCapture(data) if data is not None else None
+
+    def update_controls(self, _index: int = 0) -> None:
+        manual = self.cfg.mode == "manual" and self.mode.currentData() == "manual"
+        for button, command in self.control_buttons:
+            if command.startswith("record-"):
+                button.setEnabled(manual and bool(self.service_data.get("running")))
 
     def tick(self) -> None:
         if self.cap and self.cap.isOpened():
@@ -268,10 +298,19 @@ class Window(QMainWindow):
                         Qt.TransformationMode.SmoothTransformation,
                     )
                 )
-        try:
-            data = json.loads(STATUS.read_text("utf-8"))
-        except (OSError, json.JSONDecodeError):
-            data = {"running": False}
+        now = time.monotonic()
+        if now - self.last_state_check < 0.5:
+            return
+        self.last_state_check = now
+        data = self.service_data = read_status()
+        self.update_controls()
+        if data.get("running") and self.cap is not None:
+            self.cap.release()
+            self.cap = None
+            self.preview.clear()
+            self.preview.setText(self.trn.tr("camera.preview_paused"))
+        elif not data.get("running") and self.cap is None and self.isVisible():
+            self.open_camera()
         self.status.setText(
             self.trn.tr(
                 "service.status",
@@ -326,22 +365,33 @@ class Window(QMainWindow):
             self.cfg.storage.directory = self.directory.text()
             self.cfg.storage.retention_days = self.days.value()
             path = save(self.cfg)
+            self.update_controls()
             QMessageBox.information(
                 self, self.trn.tr("settings.saved_title"), self.trn.tr("settings.saved", path=path)
             )
-        except Exception as exc:
+        except (OSError, ValueError, TypeError) as exc:
             QMessageBox.critical(self, self.trn.tr("settings.invalid_title"), str(exc))
 
     def command(self, command: str) -> None:
-        subprocess.Popen(
-            [
-                *companion_command("WebcamCCTV-CLI", "webcamcctv.cli"),
-                "--language",
-                self.cfg.language,
-                command,
-            ],
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-        )
+        if command in {"start", "restart"} and self.cap is not None:
+            self.cap.release()
+            self.cap = None
+        try:
+            subprocess.Popen(
+                [
+                    *companion_command("WebcamCCTV-CLI", "webcamcctv.cli"),
+                    "--language",
+                    self.cfg.language,
+                    command,
+                ],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        except OSError as exc:
+            QMessageBox.critical(self, self.trn.tr("service.command_failed"), str(exc))
+            return
         if command == "start":
             self.tray.showMessage(
                 self.trn.tr("tray.started_title"), self.trn.tr("tray.started_body")
@@ -349,6 +399,8 @@ class Window(QMainWindow):
 
     def show_normal(self) -> None:
         self.show()
+        if self.cap is None and not service_running():
+            self.open_camera()
         self.raise_()
         self.activateWindow()
 
@@ -359,13 +411,18 @@ class Window(QMainWindow):
     def closeEvent(self, event: QCloseEvent) -> None:
         if self.cap:
             self.cap.release()
-        event.accept()
+            self.cap = None
+        if self.tray_available:
+            self.hide()
+            event.ignore()
+        else:
+            event.accept()
 
 
 def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName("WebcamCCTV")
-    app.setQuitOnLastWindowClosed(False)
+    app.setQuitOnLastWindowClosed(not QSystemTrayIcon.isSystemTrayAvailable())
     cfg = load()
     if not cfg.first_run_complete and FirstRunDialog(cfg).exec() != QDialog.DialogCode.Accepted:
         return 0

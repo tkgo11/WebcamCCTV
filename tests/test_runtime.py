@@ -21,6 +21,4 @@ def test_companion_command_finds_frozen_sibling(monkeypatch, tmp_path: Path) -> 
     service.touch()
     monkeypatch.setattr(runtime.sys, "frozen", True, raising=False)
     monkeypatch.setattr(runtime.sys, "executable", str(gui))
-    assert runtime.companion_command("WebcamCCTV-Service", "webcamcctv.service") == [
-        str(service)
-    ]
+    assert runtime.companion_command("WebcamCCTV-Service", "webcamcctv.service") == [str(service)]
