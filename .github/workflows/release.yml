@@ -108,7 +108,7 @@ jobs:
           else
             build/pyinstaller/dist/WebcamCCTV-CLI version
           fi
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: release-${{ matrix.platform }}
           path: |
