@@ -260,7 +260,9 @@ class AppConfig:
                 break
         if self.schedule.record_when_locked:
             errors.append(tr.tr("validation.lock_detection_unsupported"))
-        if self.features.remote_api and self.features.remote_bind != "127.0.0.1":
+        if not isinstance(self.features.remote_bind, str) or (
+            self.features.remote_api and self.features.remote_bind != "127.0.0.1"
+        ):
             errors.append(tr.tr("validation.remote_loopback"))
         if self.features.remote_api:
             errors.append(tr.tr("validation.remote_unsupported"))
@@ -320,16 +322,16 @@ class AppConfig:
             p = Path(self.storage.directory).expanduser()
             if "\0" in str(p):
                 errors.append(tr.tr("validation.storage_path"))
-            if self.features.sync_directory:
-                if not isinstance(self.features.sync_directory, str):
-                    errors.append(tr.tr("validation.sync_path"))
-                    sync = None
-                else:
-                    sync = Path(self.features.sync_directory).expanduser()
+            if not isinstance(self.features.sync_directory, str):
+                errors.append(tr.tr("validation.sync_path"))
+                sync = None
+            elif self.features.sync_directory:
+                sync = Path(self.features.sync_directory).expanduser()
+            else:
+                sync = None
+            if sync is not None:
                 try:
-                    if sync is not None and (
-                        sync.resolve() == p.resolve() or p.resolve() in sync.resolve().parents
-                    ):
+                    if sync.resolve() == p.resolve() or p.resolve() in sync.resolve().parents:
                         errors.append(tr.tr("validation.sync_path"))
                 except OSError:
                     errors.append(tr.tr("validation.sync_path"))
