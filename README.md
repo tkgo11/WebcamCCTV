@@ -40,7 +40,7 @@ pip install -e .
 webcamcctv-gui
 ```
 
-On first run: review the privacy notice, choose a discovered camera and writable storage directory, select motion or continuous recording, save, then start the service. Closing the GUI does not stop it. Camera permission must be granted through the OS.
+On first run: review the privacy notice, choose a discovered camera and writable storage directory, select motion or continuous recording, save, then start the service. The dashboard follows the system appearance by default and can be switched to dark or light mode from its header. Use `Ctrl+S` to save, `Ctrl+F` to search recordings, and `Ctrl+R` to refresh. Closing the GUI does not stop the service. Camera permission must be granted through the OS.
 
 ## CLI
 
@@ -74,7 +74,7 @@ pytest
 ruff check .
 mypy src
 python -m build
-python packaging/build_release.py --version 0.2.0
+python packaging/build_release.py --version 0.3.0
 ```
 
 ### Automated releases
@@ -83,8 +83,8 @@ Push a semantic version tag matching the version in `pyproject.toml` to build an
 Windows, macOS, and Linux downloads automatically:
 
 ```bash
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.3.0
+git push origin v0.3.0
 ```
 
 The **Cross-platform release** workflow can also be run manually for an existing tag. It runs tests, lint, type checks, translation validation, dependency auditing and package builds; then it builds

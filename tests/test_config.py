@@ -10,7 +10,10 @@ def test_atomic_roundtrip(tmp_path):
     cfg = AppConfig()
     cfg.camera.name = "Garage"
     save(cfg, p)
-    assert load(p).camera.name == "Garage" and json.loads(p.read_text())["schema_version"] == 2
+    loaded = load(p)
+    assert loaded.camera.name == "Garage"
+    assert loaded.theme == "system"
+    assert json.loads(p.read_text())["schema_version"] == 2
 
 
 def test_v1_configuration_is_migrated(tmp_path):
@@ -24,6 +27,16 @@ def test_invalid_config_rejected():
     cfg.camera.fps = 0
     with pytest.raises(ValueError, match="frame rate"):
         cfg.validate()
+
+
+def test_theme_roundtrip_and_validation(tmp_path):
+    path = tmp_path / "config.json"
+    config = AppConfig(theme="dark")
+    save(config, path)
+    assert load(path).theme == "dark"
+    config.theme = "neon"
+    with pytest.raises(ValueError, match="Appearance"):
+        config.validate()
 
 
 def test_backup_restores_corruption(tmp_path):
