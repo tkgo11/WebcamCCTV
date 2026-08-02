@@ -1,0 +1,72 @@
+"""Headless GUI smoke test when the platform Qt libraries are available."""
+
+import os
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+import numpy as np
+import pytest
+
+QApplication = pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError).QApplication
+
+from webcamcctv import gui
+from webcamcctv.config import AppConfig
+
+
+class FakeCapture:
+    def __init__(self, _device):
+        self.opened = True
+
+    def isOpened(self):
+        return self.opened
+
+    def read(self):
+        return True, np.zeros((24, 32, 3), dtype=np.uint8)
+
+    def release(self):
+        self.opened = False
+
+
+def test_window_preview_manual_controls_and_service_handoff(monkeypatch, tmp_path):
+    app = QApplication.instance() or QApplication([])
+    monkeypatch.setattr(
+        gui,
+        "discover",
+        lambda **_kwargs: [{"index": 0, "name": "Camera 0", "width": 32, "height": 24}],
+    )
+    monkeypatch.setattr(gui, "service_running", lambda: False)
+    monkeypatch.setattr(
+        gui,
+        "read_status",
+        lambda: {"running": False, "camera_connected": False, "recording": False},
+    )
+    monkeypatch.setattr(gui.cv2, "VideoCapture", FakeCapture)
+    launched = []
+    monkeypatch.setattr(gui, "companion_command", lambda *_args: ["webcamcctv"])
+    monkeypatch.setattr(
+        gui.subprocess, "Popen", lambda command, **options: launched.append((command, options))
+    )
+
+    config = AppConfig(first_run_complete=True)
+    config.storage.directory = str(tmp_path)
+    window = gui.Window(config)
+    window.tray_available = False
+    window.tick()
+    assert window.cap is not None and window.preview.pixmap() is not None
+
+    window.mode.setCurrentIndex(window.mode.findData("manual"))
+    config.mode = "manual"
+    window.service_data["running"] = True
+    window.update_controls()
+    manual_buttons = [
+        button for button, command in window.control_buttons if command.startswith("record-")
+    ]
+    assert all(button.isEnabled() for button in manual_buttons)
+
+    window.command("start")
+    assert window.cap is None
+    assert launched[0][0][-3:] == ["--language", config.language, "start"]
+    window.show_normal()
+    assert window.cap is not None
+    window.close()
+    app.processEvents()

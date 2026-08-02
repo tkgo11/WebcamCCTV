@@ -1,4 +1,4 @@
-"""Source-tree compatibility entry point for startup registration."""
+"""PyInstaller entry point for startup registration."""
 
 from webcamcctv.startup import main
 

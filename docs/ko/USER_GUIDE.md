@@ -2,7 +2,7 @@
 
 ## 설치
 
-Python 3.11 이상에서 가상 환경을 만든 뒤 `pip install -e .`을 실행하고 `webcamcctv-gui`로 GUI를 엽니다. 배포용 빌드는 README의 PyInstaller 절차를 따릅니다. Linux 자동 시작은 `python packaging/install.py --language ko`, Windows 자동 시작도 같은 명령으로 등록합니다. 제거할 때는 `--remove`를 추가합니다.
+Python 3.11 이상에서 가상 환경을 만든 뒤 `pip install -e .`을 실행하고 `webcamcctv-gui`로 GUI를 엽니다. 배포용 빌드는 README의 PyInstaller 절차를 따릅니다. Linux, Windows, macOS 자동 시작은 `webcamcctv-startup --language ko`로 등록하고 제거할 때는 `--remove`를 추가합니다. 네이티브 압축 파일에서는 함께 들어 있는 `WebcamCCTV-Startup` 실행 파일을 사용합니다.
 
 ## 처음 실행
 
@@ -12,6 +12,7 @@ Python 3.11 이상에서 가상 환경을 만든 뒤 `pip install -e .`을 실�
 
 - **연속 녹화**는 설정한 분할 시간마다 MP4 파일을 완결합니다.
 - **움직임 감지**는 감지 전 버퍼와 감지 후 시간을 포함해 녹화합니다.
+- **수동 녹화**에서는 GUI의 **녹화 시작/중지** 버튼이나 `webcamcctv record-start`, `webcamcctv record-stop` 명령을 사용합니다.
 - 녹화 파일과 UTF-8 JSON 이벤트 정보는 `연/월/일` 폴더에 저장됩니다.
 - 설정의 언어를 바꾸면 GUI, 시스템 트레이 메뉴, 상태, 녹화 목록에 즉시 반영됩니다. 재설치할 필요가 없습니다.
 - 최근 녹화 검색란에는 `현관 카메라`와 같은 한국어 카메라 이름이나 이벤트 이름을 입력할 수 있습니다.
@@ -25,7 +26,7 @@ Python 3.11 이상에서 가상 환경을 만든 뒤 `pip install -e .`을 실�
 
 - **카메라를 사용할 수 없음:** 화상 회의 앱을 닫고 운영체제 카메라 권한을 확인한 뒤 `webcamcctv --language ko test-camera`를 실행하십시오.
 - **녹화 파일이 없음:** 녹화 폴더 쓰기 권한, 남은 저장 공간, OpenCV MP4V 코덱을 확인하십시오.
-- **서비스 상태 이상:** `webcamcctv --language ko --json status`로 PID와 상태를 확인하십시오.
+- **서비스 상태 이상:** `webcamcctv --language ko --json status`로 PID와 상태를 확인하십시오. 개인정보를 가린 진단 보고서는 `webcamcctv diagnostics`로 만들 수 있습니다.
 - **한국어 깨짐:** 터미널을 UTF-8로 설정하십시오. 설정, 상태, 이벤트 정보와 보고서는 항상 UTF-8로 기록됩니다.
 - 지원 자료를 공유할 때는 개인정보가 포함된 경로, 카메라 이름, 영상과 인증 정보를 제거하십시오.
 
@@ -35,4 +36,4 @@ Python 3.11 이상에서 가상 환경을 만든 뒤 `pip install -e .`을 실�
 
 ## 삭제와 데이터 제거
 
-먼저 `python packaging/install.py --language ko --remove`로 자동 시작을 제거하고 패키지를 삭제합니다. 설정, 상태, 로그와 녹화 영상은 실수로 증거를 지우지 않도록 자동 삭제하지 않습니다. 보호할 영상이 없는지 확인한 후 운영체제의 WebcamCCTV 설정/상태 폴더와 지정한 녹화 폴더를 직접 삭제하십시오.
+먼저 `webcamcctv-startup --language ko --remove`(또는 네이티브 자동 시작 실행 파일)로 자동 시작을 제거하고 패키지를 삭제합니다. 설정, 상태, 로그와 녹화 영상은 실수로 증거를 지우지 않도록 자동 삭제하지 않습니다. 보호할 영상이 없는지 확인한 후 운영체제의 WebcamCCTV 설정/상태 폴더와 지정한 녹화 폴더를 직접 삭제하십시오.
