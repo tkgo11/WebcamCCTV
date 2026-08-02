@@ -69,3 +69,14 @@ def test_invalid_normalized_polygon_rejected():
     config.camera.privacy_masks = [[[0, 0], [1.2, 0], [0, 1]]]
     with pytest.raises(ValueError, match="polygons"):
         config.validate()
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("sync_directory", 0), ("remote_bind", 0)],
+)
+def test_invalid_feature_field_types_are_rejected(field, value):
+    config = AppConfig()
+    setattr(config.features, field, value)
+    with pytest.raises(ValueError):
+        config.validate()
