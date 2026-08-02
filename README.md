@@ -27,10 +27,10 @@ Recordings use `YYYY/MM/DD/YYYYMMDD_HHMMSS_Camera.mp4` with atomic JSON sidecars
 
 ## Staged implementation
 
-1. **Delivered foundation:** safe configuration, discovery/preview, independent service, continuous/motion MP4, pre/post event capture, reconnect, retention, status UI, CLI, Linux/Windows startup registration, tests and packaging guidance.
-2. **Next production increment:** SQLite recording browser/timeline, schedules/idle detection, thumbnails, notifications and secure OS keyring secrets.
-3. **Optional modules:** ONNX object detection, microphone muxing, encrypted archives and opt-in authenticated local API.
-4. **Platform completion:** signed installers, macOS LaunchAgent, hardware encoder probing, recovery/remux of interrupted recordings, and platform certification.
+1. **Delivered foundation:** safe schema-v2 configuration, discovery/preview, independent service, continuous/motion MP4, pre/post event capture, reconnect, retention, status UI and CLI.
+2. **Recording expansion:** SQLite indexing, thumbnails, schedule evaluation, privacy masks, camera controls, encoder selection, atomic interrupted-segment handling, checksummed synchronization and diagnostics export.
+3. **Optional integrations:** OS-keyring secrets, AES-GCM archives, notification adapters, and dependency groups for local AI and audio pipelines.
+4. **Platform delivery:** Linux/Windows startup registration, a per-user macOS LaunchAgent, cross-platform packaged archives, checksums, and release signing guidance.
 
 The staged list is explicit because the current release does **not** claim unimplemented requested capabilities; see [Known limitations](#known-limitations).
 
@@ -106,7 +106,7 @@ There are no credentials, telemetry, remote API, cloud upload, shell interpolati
 
 ## Known limitations
 
-This functional v0.1 meets the central capture path but does not yet include audio, multiple concurrent cameras, schedules/lock-state triggers, configurable controls/zones/privacy masks, AI classifiers, notification channels, a recording-browser/timeline, remote access, OS credential storage (no secrets are currently accepted), encryption/sync, thumbnails, a macOS service, hardware encoder selection, full diagnostics bundle, GUI installer, or signed binaries. Manual snapshot currently returns a documented unsupported exit code. MP4 containers can be damaged by power loss; use short segments. These are release-blocking items if those optional/expanded requirements are required in a deployment.
+Expanded capabilities are deliberately local-first and opt-in. Remote access remains loopback-only, keyring/encryption/audio/AI support requires the corresponding optional dependency group, camera controls and codecs remain backend-dependent, and signing requires release-owner certificates that are never stored in this repository. Active MP4 files use a recoverable working-file state and are quarantined after interruption, but physically damaged media may still require an external remux tool. Validate every selected camera, microphone, encoder, OS service, and installer on the target platform before deployment.
 
 ## Development and tests
 

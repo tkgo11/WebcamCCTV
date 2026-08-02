@@ -7,6 +7,8 @@ import json
 import os
 import subprocess
 import time
+from pathlib import Path
+import cv2
 
 from . import __version__
 from .cameras import discover
@@ -26,6 +28,7 @@ COMMANDS = [
     "snapshot",
     "show-log-path",
     "version",
+    "diagnostics",
 ]
 
 
@@ -41,6 +44,7 @@ def parser(tr: Translator) -> argparse.ArgumentParser:
     result.add_argument("--json", action="store_true", help=tr.tr("cli.json_help"))
     result.add_argument("--language", choices=("en", "ko"), help=tr.tr("language.label"))
     result.add_argument("command", choices=COMMANDS, help=tr.tr("cli.command_help"))
+    result.add_argument("--output", type=Path)
     return result
 
 
@@ -107,8 +111,30 @@ def main() -> int:
         )
         return 0 if available else 4
     if args.command == "snapshot":
-        emit({"error": tr.tr("cli.snapshot_unsupported")}, True)
-        return 5
+        cfg = load()
+        cap = cv2.VideoCapture(cfg.camera.device)
+        ok, frame = cap.read()
+        cap.release()
+        if not ok:
+            emit({"error": tr.tr("cli.camera_unavailable")}, True)
+            return 4
+        from .service import Service
+        service = Service(cfg)
+        frame = service.transform(frame)
+        target = args.output or service.storage.snapshot_path(cfg.camera.name)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if not cv2.imwrite(str(target), frame):
+            emit({"error": "snapshot could not be written"}, True)
+            return 2
+        emit({"path": str(target)} if machine else str(target), machine)
+        return 0
+    if args.command == "diagnostics":
+        from .features import write_diagnostics
+        target = args.output or STATE_DIR / "diagnostics.json"
+        status = json.loads(STATUS.read_text("utf-8")) if STATUS.exists() else {"running": False}
+        write_diagnostics(target, load(), status)
+        emit({"path": str(target)} if machine else str(target), machine)
+        return 0
     if args.command == "show-log-path":
         emit(str(STATE_DIR) if machine else tr.tr("cli.log_path", path=STATE_DIR), machine)
         return 0

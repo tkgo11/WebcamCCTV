@@ -36,7 +36,26 @@ def main() -> None:
         )
         subprocess.run(["schtasks", *operation], check=True)
     elif system == "Darwin":
-        raise SystemExit(tr.tr("installer.macos_pending"))
+        label = "com.webcamcctv.service"
+        target = Path.home() / "Library/LaunchAgents" / f"{label}.plist"
+        domain = f"gui/{__import__('os').getuid()}"
+        subprocess.run(["launchctl", "bootout", domain, str(target)], check=False)
+        if args.remove:
+            target.unlink(missing_ok=True)
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            command = str(Path(sys.executable).resolve())
+            target.write_text(
+                """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>Label</key><string>com.webcamcctv.service</string>
+<key>ProgramArguments</key><array><string>COMMAND</string><string>-m</string><string>webcamcctv.service</string></array>
+<key>RunAtLoad</key><true/><key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
+</dict></plist>
+""".replace("COMMAND", command), "utf-8")
+            subprocess.run(["plutil", "-lint", str(target)], check=True)
+            subprocess.run(["launchctl", "bootstrap", domain, str(target)], check=True)
     else:
         raise SystemExit(tr.tr("installer.unsupported", system=system))
     print(tr.tr("installer.removed" if args.remove else "installer.installed"))
