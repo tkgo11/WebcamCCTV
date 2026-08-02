@@ -49,10 +49,11 @@ from PySide6.QtWidgets import (
 
 from .cameras import discover
 from .config import AppConfig, load, save
+from .gui_model import manual_record_controls
 from .gui_theme import THEMES, resolve_theme, stylesheet
 from .i18n import Translator, format_datetime
 from .runtime import companion_command
-from .state import read_status, service_running
+from .state import read_status, request_manual_record, service_running
 
 LANGUAGES = (("en", "language.english"), ("ko", "language.korean"))
 MODES = (("motion", "mode.motion"), ("continuous", "mode.continuous"), ("manual", "mode.manual"))
@@ -257,6 +258,8 @@ class Window(QMainWindow):
         self.service_data: dict[str, object] = {"running": False}
         self._status_animation: QPropertyAnimation | None = None
         self._last_status_text = ""
+        self._manual_record_pending: bool | None = None
+        self._manual_record_deadline = 0.0
         self.resize(1380, 860)
         self.setMinimumSize(980, 660)
 
@@ -654,11 +657,24 @@ class Window(QMainWindow):
             self.preview_state.set_state("good", self.trn.tr("preview.live"))
 
     def update_controls(self, _index: int = 0) -> None:
-        manual = self.mode.currentData() == "manual"
-        running = bool(self.service_data.get("running"))
+        can_start, can_stop = manual_record_controls(self.service_data)
         for button, command in self.control_buttons:
-            if command.startswith("record-"):
-                button.setEnabled(manual and running)
+            if command == "record-start":
+                button.setEnabled(can_start)
+            elif command == "record-stop":
+                button.setEnabled(can_stop)
+            else:
+                continue
+            if not self.service_data.get("running"):
+                hint = self.trn.tr("recording.control_requires_service")
+            elif self.service_data.get("mode") != "manual":
+                hint = self.trn.tr("recording.control_requires_restart")
+            else:
+                hint = self.trn.tr(
+                    "recording.start_hint" if command == "record-start" else "recording.stop_hint"
+                )
+            button.setToolTip(hint)
+            button.setAccessibleDescription(hint)
 
     def _fade_status(self) -> None:
         effect = self.status.graphicsEffect()
@@ -713,7 +729,15 @@ class Window(QMainWindow):
         if now - self.last_state_check < 0.5:
             return
         self.last_state_check = now
-        data = self.service_data = read_status()
+        data = read_status()
+        if self._manual_record_pending is not None:
+            request_completed = bool(data.get("recording")) == self._manual_record_pending
+            request_expired = now >= self._manual_record_deadline or not data.get("running")
+            if request_completed or request_expired:
+                self._manual_record_pending = None
+            else:
+                data["recording"] = self._manual_record_pending
+        self.service_data = data
         self.update_controls()
         if data.get("running") and self.cap is not None:
             self.cap.release()
@@ -775,6 +799,9 @@ class Window(QMainWindow):
             QMessageBox.critical(self, self.trn.tr("settings.invalid_title"), str(exc))
 
     def command(self, command: str) -> None:
+        if command in {"record-start", "record-stop"}:
+            self.manual_record(command == "record-start")
+            return
         if command in {"start", "restart"} and self.cap is not None:
             self.cap.release()
             self.cap = None
@@ -798,6 +825,44 @@ class Window(QMainWindow):
             self.tray.showMessage(
                 self.trn.tr("tray.started_title"), self.trn.tr("tray.started_body")
             )
+
+    def manual_record(self, enabled: bool) -> None:
+        """Send a visible, direct manual-record request to the running service."""
+        data = read_status()
+        self.service_data = data
+        if not data.get("running"):
+            QMessageBox.warning(
+                self,
+                self.trn.tr("recording.command_failed"),
+                self.trn.tr("recording.control_requires_service"),
+            )
+            self.update_controls()
+            return
+        if data.get("mode") != "manual":
+            QMessageBox.warning(
+                self,
+                self.trn.tr("recording.command_failed"),
+                self.trn.tr("recording.control_requires_restart"),
+            )
+            self.update_controls()
+            return
+        if not request_manual_record(enabled):
+            QMessageBox.warning(
+                self,
+                self.trn.tr("recording.command_failed"),
+                self.trn.tr("service.not_running"),
+            )
+            self.update_controls()
+            return
+        self._manual_record_pending = enabled
+        self._manual_record_deadline = time.monotonic() + 3.0
+        self.service_data["recording"] = enabled
+        self._update_status_widgets(self.service_data)
+        self.update_controls()
+        self.status.setText(
+            self.trn.tr("recording.start_requested" if enabled else "recording.stop_requested")
+        )
+        self._fade_status()
 
     def show_normal(self) -> None:
         self.show()
