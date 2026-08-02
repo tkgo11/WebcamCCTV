@@ -35,11 +35,8 @@ def test_window_preview_manual_controls_and_service_handoff(monkeypatch, tmp_pat
         lambda **_kwargs: [{"index": 0, "name": "Camera 0", "width": 32, "height": 24}],
     )
     monkeypatch.setattr(gui, "service_running", lambda: False)
-    monkeypatch.setattr(
-        gui,
-        "read_status",
-        lambda: {"running": False, "camera_connected": False, "recording": False},
-    )
+    status_data = {"running": False, "camera_connected": False, "recording": False}
+    monkeypatch.setattr(gui, "read_status", lambda: status_data.copy())
     monkeypatch.setattr(gui.cv2, "VideoCapture", FakeCapture)
     launched = []
     monkeypatch.setattr(gui, "companion_command", lambda *_args: ["webcamcctv"])
@@ -59,12 +56,27 @@ def test_window_preview_manual_controls_and_service_handoff(monkeypatch, tmp_pat
 
     window.mode.setCurrentIndex(window.mode.findData("manual"))
     config.mode = "manual"
-    window.service_data["running"] = True
+    status_data.update(running=True, mode="manual", recording=False)
+    window.service_data = status_data.copy()
     window.update_controls()
-    manual_buttons = [
-        button for button, command in window.control_buttons if command.startswith("record-")
-    ]
-    assert all(button.isEnabled() for button in manual_buttons)
+    manual_buttons = {
+        command: button
+        for button, command in window.control_buttons
+        if command.startswith("record-")
+    }
+    assert manual_buttons["record-start"].isEnabled()
+    assert not manual_buttons["record-stop"].isEnabled()
+
+    manual_requests = []
+    monkeypatch.setattr(
+        gui,
+        "request_manual_record",
+        lambda enabled: manual_requests.append(enabled) or True,
+    )
+    window.command("record-start")
+    assert manual_requests == [True]
+    assert not manual_buttons["record-start"].isEnabled()
+    assert manual_buttons["record-stop"].isEnabled()
 
     window.command("start")
     assert window.cap is None
