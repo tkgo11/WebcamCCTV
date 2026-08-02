@@ -1,0 +1,10 @@
+import numpy as np
+from webcamcctv.motion import MotionDetector
+
+
+def test_static_frame_settles_without_motion():
+    d = MotionDetector(0.04, 50)
+    frame = np.zeros((120, 160, 3), dtype=np.uint8)
+    for _ in range(20):
+        result, _ = d.detect(frame)
+    assert result is False
