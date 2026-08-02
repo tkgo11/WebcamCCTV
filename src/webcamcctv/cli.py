@@ -6,13 +6,13 @@ import argparse
 import json
 import os
 import subprocess
-import sys
 import time
 
 from . import __version__
 from .cameras import discover
 from .config import config_path, load
 from .i18n import Translator
+from .runtime import companion_command
 from .service import STATE_DIR, STATUS, STOP
 
 COMMANDS = [
@@ -87,7 +87,7 @@ def main() -> int:
     if args.command in {"start", "restart"}:
         flags = 0x08000000 if os.name == "nt" else 0
         subprocess.Popen(
-            [sys.executable, "-m", "webcamcctv.service"],
+            companion_command("WebcamCCTV-Service", "webcamcctv.service"),
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,

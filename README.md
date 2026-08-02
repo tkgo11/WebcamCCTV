@@ -73,9 +73,23 @@ pytest
 ruff check .
 mypy src
 python -m build
-pyinstaller --noconsole --name WebcamCCTV-GUI src/webcamcctv/gui.py
-pyinstaller --noconsole --name WebcamCCTV-Service src/webcamcctv/service.py
+python packaging/build_release.py --version 0.1.0
 ```
+
+### Automated releases
+
+Push a semantic version tag matching the version in `pyproject.toml` to build and publish native
+Windows, macOS, and Linux downloads automatically:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The **Cross-platform release** workflow can also be run manually for an existing tag. It builds
+the GUI, headless service, and CLI with PyInstaller, smoke-tests the CLI on every operating system,
+and attaches the archives and SHA-256 checksum files to a GitHub Release. A version mismatch or a
+failed platform build prevents publication.
 
 Use pinned dependencies in a release lock file and build in a clean CI image. Sign Windows binaries with SignTool, macOS bundles with `codesign`/notarization, and publish SHA-256 sums plus SBOM. End users of the PyInstaller output need no Python runtime. No release executable is checked in because this Linux environment cannot produce or sign trustworthy Windows/macOS artifacts.
 

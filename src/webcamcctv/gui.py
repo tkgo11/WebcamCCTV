@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
 from .cameras import discover
 from .config import AppConfig, load, save
 from .i18n import Translator, format_datetime
+from .runtime import companion_command
 from .service import STATUS
 
 LANGUAGES = (("en", "language.english"), ("ko", "language.korean"))
@@ -333,7 +334,13 @@ class Window(QMainWindow):
 
     def command(self, command: str) -> None:
         subprocess.Popen(
-            [sys.executable, "-m", "webcamcctv.cli", "--language", self.cfg.language, command]
+            [
+                *companion_command("WebcamCCTV-CLI", "webcamcctv.cli"),
+                "--language",
+                self.cfg.language,
+                command,
+            ],
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         if command == "start":
             self.tray.showMessage(
