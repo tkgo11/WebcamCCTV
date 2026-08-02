@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "webcamcctv"
-version = "0.1.0"
+version = "0.1.1"
 description = "Local-first webcam CCTV service and desktop monitor"
 readme = "README.md"
 requires-python = ">=3.11"
