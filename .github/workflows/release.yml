@@ -47,7 +47,7 @@ jobs:
           echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
 
   build:
-    needs: prepare
+    needs: [prepare, quality]
     strategy:
       fail-fast: false
       matrix:
@@ -104,9 +104,9 @@ jobs:
         shell: bash
         run: |
           if [[ "${{ runner.os }}" == "Windows" ]]; then
-            dist/WebcamCCTV-CLI.exe version
+            build/pyinstaller/dist/WebcamCCTV-CLI.exe version
           else
-            dist/WebcamCCTV-CLI version
+            build/pyinstaller/dist/WebcamCCTV-CLI version
           fi
       - uses: actions/upload-artifact@v6
         with:
@@ -118,8 +118,29 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  quality:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e '.[dev]' build pip-audit
+      - run: python -m ruff check .
+      - run: python -m ruff format --check .
+      - run: python -m mypy src packaging tools
+      - run: python tools/validate_translations.py
+      - run: python -m pytest -q
+      - run: python -m build --sdist --wheel
+      - run: python -m pip_audit --skip-editable
+
   publish:
-    needs: [prepare, build]
+    needs: [prepare, quality, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
