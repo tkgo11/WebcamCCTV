@@ -74,7 +74,7 @@ pytest
 ruff check .
 mypy src
 python -m build
-python packaging/build_release.py --version 0.3.1
+python packaging/build_release.py --version 0.3.2
 ```
 
 ### Automated releases
@@ -83,8 +83,8 @@ Push a semantic version tag matching the version in `pyproject.toml` to build an
 Windows, macOS, and Linux downloads automatically:
 
 ```bash
-git tag v0.3.1
-git push origin v0.3.1
+git tag v0.3.2
+git push origin v0.3.2
 ```
 
 The **Cross-platform release** workflow can also be run manually for an existing tag. It runs tests, lint, type checks, translation validation, dependency auditing and package builds; then it builds
