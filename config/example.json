@@ -1,15 +1,24 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "mode": "motion",
   "camera": {
+    "id": "front-desk",
     "device": 0,
     "name": "Front Desk",
     "width": 1280,
     "height": 720,
     "fps": 20.0,
     "rotation": 0,
-    "mirror": false
+    "mirror": false,
+    "enabled": true,
+    "controls": {},
+    "motion_zones": [],
+    "privacy_masks": []
   },
+  "cameras": [],
+  "audio": {"enabled": false, "device": "", "sample_rate": 48000, "channels": 1},
+  "schedule": {"enabled": false, "weekdays": [0,1,2,3,4,5,6], "start": "00:00", "end": "23:59", "record_when_locked": false},
+  "features": {"thumbnails": true, "notifications": false, "ai_model": "", "remote_api": false, "remote_bind": "127.0.0.1", "encryption": false, "sync_directory": "", "encoder": "mp4v"},
   "motion": {
     "enabled": true,
     "sensitivity": 0.04,

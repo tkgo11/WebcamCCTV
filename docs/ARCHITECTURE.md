@@ -6,9 +6,11 @@ The GUI owns preview only; the headless service owns surveillance capture and re
 
 The capture loop transforms frames once, feeds the same frame to motion analysis and a bounded `deque`, and writes it to OpenCV's MP4V encoder. Motion starts a segment after flushing the pre-event deque and extends it until the post-event interval expires. Segments close cleanly on stop or their duration boundary. Capture read failure finalizes the writer and enters capped reconnection backoff.
 
-## Configuration schema v1
+## Configuration schema v2
 
-Top-level keys are `schema_version`, `mode`, `camera`, `motion`, `storage`, `watermark_timestamp`, and `preview_fps`. Unknown nested keys are rejected by dataclass constructors. FPS, dimensions, rotation, sensitivity, minimum motion area, segment length, and retention values are validated. Writes are fsynced then atomically renamed; an existing valid file is backed up and used if the primary becomes corrupt. `WEBCAMCCTV_CONFIG` is the supported portable-development override.
+Top-level keys include `schema_version`, `mode`, `camera`, `cameras`, `audio`, `schedule`, `features`, `motion`, and `storage`. Version-one files are migrated in memory and the next save writes version two. Unknown nested keys are rejected by dataclass constructors. FPS, dimensions, rotation, schedules, audio format, encoder, sensitivity, minimum motion area, segment length, and retention values are validated. Writes are fsynced then atomically renamed; an existing valid file is backed up and used if the primary becomes corrupt. `WEBCAMCCTV_CONFIG` is the supported portable-development override.
+
+Finalized recordings are indexed in SQLite while JSON sidecars remain the recovery source of truth. Writers use a `.partial.mp4` working name, atomically publish completed segments, generate privacy-safe thumbnails, and quarantine remnants discovered at startup. Optional synchronization verifies SHA-256 before publishing its copy.
 
 Camera controls vary radically by backend and are intentionally not promised until capability probing is implemented. `device` is an OpenCV numeric index. Storage supports any mounted path writable by the account, including mounted NAS volumes; unavailable paths surface as service failures rather than silently switching locations.
 
