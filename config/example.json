@@ -1,6 +1,7 @@
 {
   "schema_version": 2,
   "mode": "motion",
+  "theme": "system",
   "camera": {
     "id": "front-desk",
     "device": 0,
