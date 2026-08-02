@@ -2,6 +2,10 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+pytest-of-root/
+.coverage
+build-env-*/
+build-requirements-*.txt
 .mypy_cache/
 .ruff_cache/
 dist/

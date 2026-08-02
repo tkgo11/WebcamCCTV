@@ -12,7 +12,7 @@ license = {text = "MIT"}
 dependencies = ["opencv-python>=4.9", "numpy>=1.26", "platformdirs>=4.2", "PySide6>=6.7", "psutil>=5.9"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.5", "mypy>=1.10", "pyinstaller>=6.8"]
+dev = ["pytest>=8", "pytest-cov>=7", "ruff>=0.5", "mypy>=1.10", "types-psutil>=7.0", "pyinstaller>=6.8"]
 secure = ["keyring>=25", "cryptography>=43"]
 ai = ["onnxruntime>=1.18"]
 audio = ["sounddevice>=0.5", "av>=12"]
@@ -21,6 +21,7 @@ audio = ["sounddevice>=0.5", "av>=12"]
 webcamcctv = "webcamcctv.cli:main"
 webcamcctv-service = "webcamcctv.service:main"
 webcamcctv-gui = "webcamcctv.gui:main"
+webcamcctv-startup = "webcamcctv.startup:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/webcamcctv"]
@@ -28,6 +29,7 @@ packages = ["src/webcamcctv"]
 pythonpath = ["src"]
 [tool.ruff]
 line-length = 100
+extend-exclude = [".agents", ".claude", ".codex"]
 [tool.mypy]
 strict = true
 

@@ -1,7 +1,9 @@
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
+
 import pytest
+
 from webcamcctv.config import AppConfig, load, save
 from webcamcctv.i18n import (
     SUPPORTED_LOCALES,
@@ -33,7 +35,7 @@ def test_korean_os_locale_detection(monkeypatch):
 
 
 def test_locale_formatting():
-    value = datetime(2026, 8, 2, 13, 5, 9, tzinfo=timezone.utc)
+    value = datetime(2026, 8, 2, 13, 5, 9, tzinfo=UTC)
     assert "오후" in format_datetime(value, "ko") and "PM" in format_datetime(value, "en")
     assert format_duration(60, "ko") == "1분" and format_duration(1, "en") == "1 second"
     assert "GiB" in format_size(2 * 1024**3, "ko")
