@@ -10,12 +10,15 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tomllib
 import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DIST = ROOT / "dist"
-WORK = ROOT / "build" / "pyinstaller"
+BUILD_ROOT = ROOT / "build" / "pyinstaller"
+DIST = BUILD_ROOT / "dist"
+WORK = BUILD_ROOT / "work"
+SPEC = BUILD_ROOT / "spec"
 
 
 def run_pyinstaller(name: str, launcher: str, *, windowed: bool = False) -> None:
@@ -31,7 +34,7 @@ def run_pyinstaller(name: str, launcher: str, *, windowed: bool = False) -> None
         "--collect-data=webcamcctv",
         f"--distpath={DIST}",
         f"--workpath={WORK / name}",
-        f"--specpath={WORK / 'spec'}",
+        f"--specpath={SPEC}",
     ]
     if windowed:
         command.append("--windowed")
@@ -41,7 +44,7 @@ def run_pyinstaller(name: str, launcher: str, *, windowed: bool = False) -> None
 
 def copy_product_files(stage: Path) -> None:
     suffix = ".exe" if os.name == "nt" else ""
-    for name in ("WebcamCCTV-CLI", "WebcamCCTV-Service"):
+    for name in ("WebcamCCTV-CLI", "WebcamCCTV-Service", "WebcamCCTV-Startup"):
         shutil.copy2(DIST / f"{name}{suffix}", stage / f"{name}{suffix}")
 
     mac_app = DIST / "WebcamCCTV-GUI.app"
@@ -81,13 +84,19 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, default=ROOT / "release")
     args = parser.parse_args()
 
-    shutil.rmtree(DIST, ignore_errors=True)
-    shutil.rmtree(WORK, ignore_errors=True)
+    project_version = tomllib.loads((ROOT / "pyproject.toml").read_text("utf-8"))["project"][
+        "version"
+    ]
+    if args.version != project_version:
+        parser.error(f"version {args.version!r} does not match project version {project_version!r}")
+
+    shutil.rmtree(BUILD_ROOT, ignore_errors=True)
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     run_pyinstaller("WebcamCCTV-GUI", "launch_gui.py", windowed=True)
     run_pyinstaller("WebcamCCTV-Service", "launch_service.py")
     run_pyinstaller("WebcamCCTV-CLI", "launch_cli.py")
+    run_pyinstaller("WebcamCCTV-Startup", "launch_startup.py")
 
     system = platform.system().lower()
     platform_name = {"darwin": "macos", "windows": "windows", "linux": "linux"}.get(system)

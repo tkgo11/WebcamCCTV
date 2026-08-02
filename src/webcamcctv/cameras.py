@@ -1,7 +1,9 @@
 """Camera discovery and access testing."""
 
 from __future__ import annotations
+
 import cv2
+
 from .i18n import Translator
 
 

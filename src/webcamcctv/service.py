@@ -1,29 +1,36 @@
 """Headless capture service with reconnect, motion events and pre/post buffering."""
 
 from __future__ import annotations
-from collections import deque
-from pathlib import Path
-from threading import Event
-from typing import Any
+
 import json
 import logging
 import os
 import signal
 import sys
 import time
+from collections import deque
+from pathlib import Path
+from threading import Event
+from typing import Any
+
 import cv2
 import numpy as np
-from platformdirs import user_state_dir
-from .config import AppConfig, load
-from .motion import MotionDetector
-from .storage import StorageManager
-from .i18n import Translator
-from .features import Notification, Notifier, schedule_active
 
-STATE_DIR = Path(user_state_dir("WebcamCCTV"))
-STATUS = STATE_DIR / "status.json"
-STOP = STATE_DIR / "stop.request"
-LOCK = STATE_DIR / "service.lock"
+from .config import AppConfig, load
+from .features import schedule_active
+from .i18n import Translator
+from .motion import MotionDetector
+from .state import (
+    MANUAL_RECORD,
+    STATE_DIR,
+    STATUS,
+    STOP,
+    acquire_lock,
+    clear_control_markers,
+    release_lock,
+)
+from .storage import StorageManager, file_sha256
+
 log = logging.getLogger("webcamcctv.service")
 
 
@@ -42,12 +49,14 @@ class Service:
         self.path: Path | None = None
         self.working_path: Path | None = None
         self.thumbnail: np.ndarray | None = None
-        self.notifier = Notifier()
         self.storage.reconcile()
+        self.storage.cleanup()
         self.started = 0.0
         self.last_motion = 0.0
+        self.last_finished = float("-inf")
+        self.last_status = 0.0
         self.buffer: deque[tuple[float, np.ndarray]] = deque(
-            maxlen=max(1, int(cfg.camera.fps * cfg.motion.pre_event_seconds))
+            maxlen=max(0, int(cfg.camera.fps * cfg.motion.pre_event_seconds))
         )
 
     def status(self, **extra: object) -> None:
@@ -79,6 +88,8 @@ class Service:
             self.capture = None
             return False
         self.capture = cap
+        self.detector.reset()
+        self.buffer.clear()
         return True
 
     def transform(self, frame: np.ndarray) -> np.ndarray:
@@ -110,23 +121,43 @@ class Service:
             cv2.fillPoly(frame, [points], (0, 0, 0))
         return frame
 
+    def motion_input(self, frame: np.ndarray) -> np.ndarray:
+        if not self.cfg.camera.motion_zones:
+            return frame
+        height, width = frame.shape[:2]
+        mask = np.zeros((height, width), dtype=np.uint8)
+        polygons = [
+            np.array([(int(x * width), int(y * height)) for x, y in polygon], np.int32)
+            for polygon in self.cfg.camera.motion_zones
+        ]
+        cv2.fillPoly(mask, polygons, 255)
+        return cv2.bitwise_and(frame, frame, mask=mask)
+
     def begin(self, frame: np.ndarray, score: float) -> None:
-        self.path = self.storage.recording_path(self.cfg.camera.name)
-        self.working_path = self.path.with_name(self.path.stem + ".partial.mp4")
+        path = self.storage.recording_path(self.cfg.camera.name)
+        working_path = path.with_name(path.stem + ".partial.mp4")
         h, w = frame.shape[:2]
-        self.writer = cv2.VideoWriter(
-            str(self.working_path), cv2.VideoWriter_fourcc(*self.cfg.features.encoder),  # type: ignore[attr-defined]
-            self.cfg.camera.fps, (w, h)
+        writer = cv2.VideoWriter(
+            str(working_path),
+            cv2.VideoWriter_fourcc(*self.cfg.features.encoder),  # type: ignore[attr-defined]
+            self.cfg.camera.fps,
+            (w, h),
         )
-        if not self.writer.isOpened():
-            self.writer = None
+        if not writer.isOpened():
+            writer.release()
+            working_path.unlink(missing_ok=True)
             raise RuntimeError(self.trn.tr("recording.encoder_error"))
-        self.started = time.time()
+        self.path = path
+        self.working_path = working_path
+        self.writer = writer
+        self.started = (
+            self.buffer[0][0] if self.cfg.mode == "motion" and self.buffer else time.time()
+        )
         self.thumbnail = frame.copy()
         for _, old in self.buffer:
-            self.writer.write(old)
+            writer.write(old)
         self.storage.write_metadata(
-            self.path,
+            path,
             {
                 "camera": self.cfg.camera.name,
                 "started": self.started,
@@ -140,15 +171,24 @@ class Service:
         if self.writer:
             self.writer.release()
             self.writer = None
-        if self.path:
-            if self.working_path and self.working_path.exists():
-                self.working_path.replace(self.path)
+        path = self.path
+        working_path = self.working_path
+        thumbnail_frame = self.thumbnail
+        if path is None:
+            return
+        try:
+            if working_path and working_path.exists():
+                working_path.replace(path)
+            if not path.exists():
+                log.error("recording working file disappeared before finalization: %s", path)
+                return
             thumbnail = (
-                self.storage.create_thumbnail(self.path, self.thumbnail)
-                if self.cfg.features.thumbnails and self.thumbnail is not None else None
+                self.storage.create_thumbnail(path, thumbnail_frame)
+                if self.cfg.features.thumbnails and thumbnail_frame is not None
+                else None
             )
             self.storage.write_metadata(
-                self.path,
+                path,
                 {
                     "camera": self.cfg.camera.name,
                     "started": self.started,
@@ -157,10 +197,19 @@ class Service:
                     "protected": False,
                     "thumbnail": str(thumbnail) if thumbnail else None,
                     "encoder": self.cfg.features.encoder,
+                    "sha256": file_sha256(path),
                 },
             )
             if self.cfg.features.sync_directory:
-                self.storage.synchronize(self.path, Path(self.cfg.features.sync_directory).expanduser())
+                try:
+                    self.storage.synchronize_recording(
+                        path, Path(self.cfg.features.sync_directory).expanduser()
+                    )
+                except OSError as exc:
+                    log.warning("recording synchronization failed: %s", exc)
+                    self.status(sync_error=str(exc))
+            self.last_finished = time.time()
+        finally:
             self.path = None
             self.working_path = None
             self.thumbnail = None
@@ -197,39 +246,46 @@ class Service:
                     self.finish()
                     self.stop.wait(0.25)
                     continue
-                motion, score = self.detector.detect(frame)
-                self.buffer.append((now, frame.copy()))
-                should = self.cfg.mode == "continuous" or (
-                    self.cfg.mode == "motion"
-                    and (
-                        motion
-                        or (
+                motion, score = (
+                    self.detector.detect(self.motion_input(frame))
+                    if self.cfg.mode == "motion"
+                    else (False, 0.0)
+                )
+                if self.cfg.mode == "continuous":
+                    should = True
+                elif self.cfg.mode == "manual":
+                    should = MANUAL_RECORD.exists()
+                else:
+                    should = bool(
+                        (
                             self.writer
                             and now - self.last_motion < self.cfg.motion.post_event_seconds
                         )
+                        or (motion and now - self.last_finished >= self.cfg.motion.cooldown_seconds)
                     )
-                )
                 if motion:
                     self.last_motion = now
-                    if self.cfg.features.notifications:
-                        self.notifier.send(Notification("motion", "Motion detected"), now)
                 if should and self.writer is None:
                     self.begin(frame, score)
                 if self.writer:
                     self.writer.write(frame)
+                if self.cfg.mode == "motion":
+                    self.buffer.append((now, frame.copy()))
                 if self.writer and (
                     not should or now - self.started >= self.cfg.storage.segment_seconds
                 ):
                     self.finish()
                     self.storage.cleanup()
-                if int(now * 2) % 4 == 0:
+                if now - self.last_status >= 2.0:
                     self.status(motion=motion, motion_score=round(score, 4))
+                    self.last_status = now
             return 0
         finally:
             self.finish()
             if self.capture:
                 self.capture.release()
             STOP.unlink(missing_ok=True)
+            MANUAL_RECORD.unlink(missing_ok=True)
             self.status(
                 running=False,
                 camera_connected=False,
@@ -237,37 +293,30 @@ class Service:
                 message_key="service.stopped",
                 message=self.trn.tr("service.stopped"),
             )
-            LOCK.unlink(missing_ok=True)
 
 
 def main() -> int:
-    STATE_DIR.mkdir(parents=True, exist_ok=True)
-    if LOCK.exists():
-        try:
-            existing_pid = int(LOCK.read_text("ascii"))
-            os.kill(existing_pid, 0)
-        except (ValueError, ProcessLookupError, PermissionError):
-            LOCK.unlink(missing_ok=True)
-        else:
-            print(Translator(load().language).tr("service.already_running"), file=sys.stderr)
-            return 3
-    try:
-        fd = os.open(LOCK, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        os.write(fd, str(os.getpid()).encode())
-        os.close(fd)
-    except FileExistsError:
-        print(Translator(load().language).tr("service.startup_race"), file=sys.stderr)
+    if not acquire_lock():
+        print(Translator().tr("service.already_running"), file=sys.stderr)
         return 3
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-    svc = Service(load())
-    signal.signal(signal.SIGTERM, lambda *_: svc.stop.set())
-    signal.signal(signal.SIGINT, lambda *_: svc.stop.set())
     try:
-        return svc.run()
+        clear_control_markers()
+        logging.basicConfig(
+            level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s"
+        )
+        svc = Service(load())
+        signal.signal(signal.SIGTERM, lambda *_: svc.stop.set())
+        signal.signal(signal.SIGINT, lambda *_: svc.stop.set())
+        try:
+            return svc.run()
+        except Exception:
+            log.exception("fatal service error")
+            return 1
     except Exception:
         log.exception("fatal service error")
-        LOCK.unlink(missing_ok=True)
         return 1
+    finally:
+        release_lock()
 
 
 if __name__ == "__main__":
