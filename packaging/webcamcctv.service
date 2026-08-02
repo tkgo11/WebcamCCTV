@@ -1,0 +1,12 @@
+[Unit]
+Description=WebcamCCTV headless surveillance service
+After=graphical-session.target
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/webcamcctv-service
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+[Install]
+WantedBy=default.target
