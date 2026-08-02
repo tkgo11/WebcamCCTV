@@ -96,6 +96,7 @@ class AppConfig:
     watermark_timestamp: bool = True
     preview_fps: float = 5.0
     language: str = field(default_factory=detect_locale)
+    theme: str = "system"
     notification_language: str = ""
     date_time_format: str = ""
     first_run_complete: bool = False
@@ -138,6 +139,7 @@ class AppConfig:
                     "watermark_timestamp",
                     "preview_fps",
                     "language",
+                    "theme",
                     "notification_language",
                     "date_time_format",
                     "first_run_complete",
@@ -154,6 +156,8 @@ class AppConfig:
         errors: list[str] = []
         if self.language not in SUPPORTED_LOCALES:
             errors.append(tr.tr("validation.language"))
+        if not isinstance(self.theme, str) or self.theme not in {"system", "dark", "light"}:
+            errors.append(tr.tr("validation.theme"))
         if self.notification_language and self.notification_language not in SUPPORTED_LOCALES:
             errors.append(tr.tr("validation.notification_language"))
         if not isinstance(self.notification_language, str):

@@ -51,6 +51,9 @@ def test_window_preview_manual_controls_and_service_handoff(monkeypatch, tmp_pat
     config.storage.directory = str(tmp_path)
     window = gui.Window(config)
     window.tray_available = False
+    assert window.theme.currentData() == "system"
+    assert window.service_card.property("card") is True
+    assert window.search.accessibleName()
     window.tick()
     assert window.cap is not None and window.preview.pixmap() is not None
 

@@ -15,12 +15,13 @@ Python 3.11 이상에서 가상 환경을 만든 뒤 `pip install -e .`을 실�
 - **수동 녹화**에서는 GUI의 **녹화 시작/중지** 버튼이나 `webcamcctv record-start`, `webcamcctv record-stop` 명령을 사용합니다.
 - 녹화 파일과 UTF-8 JSON 이벤트 정보는 `연/월/일` 폴더에 저장됩니다.
 - 설정의 언어를 바꾸면 GUI, 시스템 트레이 메뉴, 상태, 녹화 목록에 즉시 반영됩니다. 재설치할 필요가 없습니다.
+- 헤더의 화면 모드에서 시스템, 다크 또는 라이트 테마를 선택할 수 있습니다. `Ctrl+S`는 설정 저장, `Ctrl+F`는 검색 이동, `Ctrl+R`은 새로 고침입니다.
 - 최근 녹화 검색란에는 `현관 카메라`와 같은 한국어 카메라 이름이나 이벤트 이름을 입력할 수 있습니다.
 - GUI를 닫아도 백그라운드 서비스는 계속 실행됩니다. 트레이 메뉴 또는 CLI로 시작, 중지, 다시 시작할 수 있습니다.
 
 ## 설정 파일
 
-설정은 버전이 지정된 UTF-8 JSON입니다. 주요 항목은 `language`, `notification_language`, `date_time_format`, `camera`, `motion`, `storage`, `mode`입니다. `language`는 `en` 또는 `ko`이고 알림 언어는 별도로 선택할 수 있습니다. 빈 `date_time_format`은 선택 언어의 기본 날짜 형식을 사용합니다. 저장할 때 임시 파일을 동기화한 뒤 원자적으로 교체하며 기존 파일은 백업합니다. `webcamcctv --language ko validate-config`로 검사할 수 있습니다.
+설정은 버전이 지정된 UTF-8 JSON입니다. 주요 항목은 `language`, `theme`, `notification_language`, `date_time_format`, `camera`, `motion`, `storage`, `mode`입니다. `language`는 `en` 또는 `ko`이고 `theme`은 `system`, `dark`, `light` 중 하나입니다. 알림 언어는 별도로 선택할 수 있습니다. 빈 `date_time_format`은 선택 언어의 기본 날짜 형식을 사용합니다. 저장할 때 임시 파일을 동기화한 뒤 원자적으로 교체하며 기존 파일은 백업합니다. `webcamcctv --language ko validate-config`로 검사할 수 있습니다.
 
 ## 문제 해결
 

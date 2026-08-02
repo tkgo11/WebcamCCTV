@@ -1,1 +1,46 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760"><style>.bg{fill:#f4f6f9}.panel{fill:white;stroke:#ccd3dc}.control{fill:#f8fafc;stroke:#98a5b5}.button{fill:#2563eb}text{font-family:"Noto Sans CJK KR","Malgun Gothic","Apple SD Gothic Neo","Segoe UI",sans-serif;fill:#172033}.title{font-size:24px;font-weight:700}.label{font-size:16px}.white{fill:white;font-size:15px}</style><rect width="1200" height="760" class="bg"/><rect x="25" y="25" width="550" height="710" rx="10" class="panel"/><text x="50" y="65" class="title">WebcamCCTV — Settings</text><text x="50" y="105" class="label">Language</text><rect x="245" y="82" width="300" height="30" rx="4" class="control"/><text x="50" y="147" class="label">Camera</text><rect x="245" y="124" width="300" height="30" rx="4" class="control"/><text x="50" y="189" class="label">Recording mode</text><rect x="245" y="166" width="300" height="30" rx="4" class="control"/><text x="50" y="231" class="label">Recording folder</text><rect x="245" y="208" width="300" height="30" rx="4" class="control"/><text x="50" y="273" class="label">Retention period (days)</text><rect x="245" y="250" width="300" height="30" rx="4" class="control"/><rect x="245" y="340" width="300" height="38" rx="5" class="button"/><text x="280" y="365" class="white">Save validated settings</text><rect x="50" y="400" width="145" height="38" rx="5" class="button"/><text x="98" y="425" class="white">Start</text><rect x="205" y="400" width="145" height="38" rx="5" class="button"/><text x="252" y="425" class="white">Stop</text><rect x="360" y="400" width="185" height="38" rx="5" class="button"/><text x="400" y="425" class="white">Restart</text><text x="50" y="480" class="title">Recent recordings</text><rect x="50" y="500" width="495" height="38" rx="5" class="control"/><text x="65" y="525" class="label">Search camera or event</text><text x="50" y="700" class="label">Camera preview</text><rect x="600" y="25" width="575" height="710" rx="10" fill="#10151d"/><text x="790" y="370" class="white" style="font-size:24px">Service: running | Camera: connected | Recording: recording</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760">
+  <defs>
+    <linearGradient id="preview" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#101b31"/><stop offset="1" stop-color="#050914"/>
+    </linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="8" stdDeviation="18" flood-color="#020617" flood-opacity=".25"/></filter>
+  </defs>
+  <style>
+    text{font-family:Inter,"Segoe UI",sans-serif;fill:#f8fafc}.muted{fill:#94a3b8}.title{font-size:22px;font-weight:700}.section{font-size:15px;font-weight:700}.small{font-size:11px}.body{font-size:12px}.card{fill:#111827;stroke:#263247}.input{fill:#172033;stroke:#263247}.primary{fill:#5b8def}.pill{fill:#12352e}.good{fill:#34d399}.danger{fill:#fb7185}
+  </style>
+  <rect width="1200" height="760" fill="#0b1120"/>
+  <g transform="translate(24 18)">
+    <rect x="0" y="4" width="42" height="36" rx="10" fill="#172033" stroke="#5b8def"/>
+    <circle cx="20" cy="22" r="7" fill="none" stroke="#5b8def" stroke-width="2"/><path d="M32 17l7-4v18l-7-4z" fill="none" stroke="#5b8def" stroke-width="2"/>
+    <text x="56" y="21" class="title">WebcamCCTV</text><text x="56" y="39" class="muted body">Private, local-first camera monitoring</text>
+    <rect x="884" y="7" width="78" height="29" rx="14" class="pill"/><text x="905" y="26" class="good small" font-weight="700">RUNNING</text>
+    <text x="980" y="26" class="muted body">Appearance</text><rect x="1055" y="2" width="97" height="38" rx="8" class="input"/><text x="1077" y="26" class="body">Dark</text>
+  </g>
+  <g transform="translate(24 78)" filter="url(#shadow)">
+    <rect width="365" height="188" rx="14" class="card"/><text x="18" y="28" class="section">Surveillance service</text><text x="18" y="47" class="muted small">Monitor health and control background capture</text>
+    <text x="18" y="79" class="muted body">Service</text><text x="18" y="105" class="muted body">Camera</text><text x="18" y="131" class="muted body">Recording</text>
+    <rect x="269" y="62" width="78" height="22" rx="11" class="pill"/><text x="287" y="77" class="good small" font-weight="700">RUNNING</text>
+    <rect x="274" y="88" width="73" height="22" rx="11" fill="#2e2b18"/><text x="285" y="103" fill="#fbbf24" class="small">CONNECTED</text>
+    <rect x="292" y="114" width="55" height="22" rx="11" fill="#182235"/><text x="307" y="129" class="muted small">IDLE</text>
+    <rect x="18" y="148" width="102" height="34" rx="8" class="primary"/><text x="53" y="169" class="body" fill="white" font-weight="700">Start</text>
+    <rect x="128" y="148" width="102" height="34" rx="8" class="input"/><text x="163" y="169" class="danger body" font-weight="700">Stop</text>
+    <rect x="238" y="148" width="109" height="34" rx="8" class="input"/><text x="269" y="169" class="body" font-weight="700">Restart</text>
+  </g>
+  <g transform="translate(24 280)" filter="url(#shadow)">
+    <rect width="365" height="282" rx="14" class="card"/><text x="18" y="28" class="section">Settings</text><text x="18" y="47" class="muted small">Capture, storage, and interface preferences</text>
+    <g class="body"><text x="18" y="81" class="muted">Language</text><text x="18" y="123" class="muted">Camera</text><text x="18" y="165" class="muted">Recording mode</text><text x="18" y="207" class="muted">Folder</text></g>
+    <g class="input"><rect x="145" y="60" width="202" height="34" rx="8"/><rect x="145" y="102" width="202" height="34" rx="8"/><rect x="145" y="144" width="202" height="34" rx="8"/><rect x="145" y="186" width="202" height="34" rx="8"/></g>
+    <g class="body"><text x="159" y="81">English</text><text x="159" y="123">Camera 0 — 1280×720</text><text x="159" y="165">Motion detection</text><text x="159" y="207" class="muted">~/Videos/WebcamCCTV</text></g>
+    <rect x="18" y="232" width="329" height="38" rx="8" class="primary"/><text x="111" y="256" class="body" fill="white" font-weight="700">Save validated settings</text>
+  </g>
+  <g transform="translate(24 576)" filter="url(#shadow)">
+    <rect width="365" height="160" rx="14" class="card"/><text x="18" y="28" class="section">Recent recordings</text><text x="18" y="47" class="muted small">Search the latest locally stored events</text>
+    <rect x="18" y="62" width="329" height="34" rx="8" class="input"/><text x="32" y="83" class="muted body">Search camera or event</text><text x="18" y="125" class="body">Today, 14:32 — Camera 0 — Motion detected</text><text x="18" y="148" class="muted body">Today, 13:04 — Camera 0 — Motion detected</text>
+  </g>
+  <g transform="translate(407 78)" filter="url(#shadow)">
+    <rect width="769" height="658" rx="14" class="card"/><text x="20" y="32" class="section">Camera preview</text><rect x="683" y="14" width="66" height="25" rx="12" class="pill"/><text x="702" y="31" class="good small" font-weight="700">LIVE</text>
+    <rect x="18" y="54" width="733" height="552" rx="12" fill="url(#preview)" stroke="#263247"/>
+    <circle cx="384" cy="310" r="62" fill="#5b8def" opacity=".08"/><circle cx="384" cy="310" r="30" fill="none" stroke="#5b8def" stroke-width="3"/><circle cx="384" cy="310" r="10" fill="none" stroke="#5b8def" stroke-width="3"/><path d="M411 295l22-13v56l-22-13z" fill="none" stroke="#5b8def" stroke-width="3"/>
+    <text x="20" y="635" class="muted body">The local preview pauses automatically while the background service owns the camera.</text>
+  </g>
+</svg>
