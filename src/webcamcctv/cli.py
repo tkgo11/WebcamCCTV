@@ -82,8 +82,8 @@ def start_service(tr: Translator, machine: bool) -> int:
             emit(tr.tr("service.start_failed"), machine)
             return 5
         time.sleep(0.05)
-    emit(tr.tr("service.started"), machine)
-    return 0
+    emit(tr.tr("service.start_timeout"), machine)
+    return 5
 
 
 def main() -> int:
