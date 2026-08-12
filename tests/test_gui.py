@@ -85,3 +85,27 @@ def test_window_preview_manual_controls_and_service_handoff(monkeypatch, tmp_pat
     assert window.cap is not None
     window.close()
     app.processEvents()
+
+
+def test_window_marks_preview_unavailable_without_discovered_camera(monkeypatch, tmp_path):
+    app = QApplication.instance() or QApplication([])
+    monkeypatch.setattr(gui, "discover", lambda **_kwargs: [])
+    monkeypatch.setattr(gui, "service_running", lambda: False)
+    monkeypatch.setattr(
+        gui,
+        "read_status",
+        lambda: {"running": False, "camera_connected": False, "recording": False},
+    )
+
+    config = AppConfig(first_run_complete=True)
+    config.storage.directory = str(tmp_path)
+    window = gui.Window(config)
+    window.tray_available = False
+
+    assert window.cap is None
+    assert window.preview_state.property("state") == "warning"
+    assert window.preview_state.text() == "unavailable"
+    assert window.preview.text() == "Camera is unavailable or being used by another application."
+
+    window.close()
+    app.processEvents()

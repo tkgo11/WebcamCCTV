@@ -60,6 +60,23 @@ def test_start_reports_early_process_failure(monkeypatch, capsys):
     assert "exited" in capsys.readouterr().out
 
 
+def test_start_reports_timeout_when_service_is_never_confirmed(monkeypatch, capsys):
+    class StartingProcess:
+        def poll(self):
+            return None
+
+    clock = iter((0.0, 0.0, 2.1))
+    monkeypatch.setattr(cli, "service_running", lambda: False)
+    monkeypatch.setattr(cli, "clear_control_markers", lambda: None)
+    monkeypatch.setattr(cli, "companion_command", lambda *_: ["service"])
+    monkeypatch.setattr(cli.subprocess, "Popen", lambda *_args, **_kwargs: StartingProcess())
+    monkeypatch.setattr(cli.time, "monotonic", lambda: next(clock))
+    monkeypatch.setattr(cli.time, "sleep", lambda _seconds: None)
+
+    assert cli.start_service(cli.Translator("en"), False) == 5
+    assert "did not confirm startup" in capsys.readouterr().out
+
+
 def test_validate_config_returns_machine_readable_error(monkeypatch, capsys):
     monkeypatch.setattr(cli, "load", lambda: (_ for _ in ()).throw(ValueError("bad config")))
     assert invoke(monkeypatch, ["--json", "validate-config"]) == 2

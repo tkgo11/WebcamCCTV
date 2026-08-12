@@ -124,6 +124,7 @@
   "validation.preview_fps": "미리보기 초당 프레임 수는 1에서 60 사이여야 합니다.",
   "service.not_running": "감시 서비스가 실행 중이 아닙니다.",
   "service.start_failed": "감시 서비스가 시작을 완료하기 전에 종료되었습니다.",
+  "service.start_timeout": "제한 시간 안에 감시 서비스가 시작되었음을 확인하지 못했습니다.",
   "service.stop_timeout": "제한 시간 안에 감시 서비스가 중지되지 않았습니다.",
   "recording.manual_mode_required": "수동 녹화 명령은 수동 녹화 모드에서만 사용할 수 있습니다.",
   "recording.manual_started": "수동 녹화를 시작했습니다.",
