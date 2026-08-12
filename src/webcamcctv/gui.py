@@ -652,8 +652,13 @@ class Window(QMainWindow):
             self.preview.clear()
             self.preview.setText(self.trn.tr("camera.preview_paused"))
             self.preview_state.set_state("warning", self.trn.tr("preview.paused"))
+        elif data is None:
+            self.cap = None
+            self.preview.clear()
+            self.preview.setText(self.trn.tr("camera.unavailable"))
+            self.preview_state.set_state("warning", self.trn.tr("status.unavailable"))
         else:
-            self.cap = cv2.VideoCapture(data) if data is not None else None
+            self.cap = cv2.VideoCapture(data)
             self.preview_state.set_state("good", self.trn.tr("preview.live"))
 
     def update_controls(self, _index: int = 0) -> None:

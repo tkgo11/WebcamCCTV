@@ -124,6 +124,7 @@
   "validation.preview_fps": "Preview frame rate must be between 1 and 60.",
   "service.not_running": "The surveillance service is not running.",
   "service.start_failed": "The surveillance service exited before startup completed.",
+  "service.start_timeout": "The surveillance service did not confirm startup in time.",
   "service.stop_timeout": "The surveillance service did not stop before the timeout.",
   "recording.manual_mode_required": "Manual recording commands require manual recording mode.",
   "recording.manual_started": "Manual recording started.",
